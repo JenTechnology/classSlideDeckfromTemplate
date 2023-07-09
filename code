@@ -1,0 +1,152 @@
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('EduProtocols ')
+    .addItem('Format Sheet', 'formatSheet')
+    .addItem('Copy Slides and Add Names', 'copySlidesAndAddNames')
+    .addItem('Add a New Period', 'addAnotherPeriod')
+    .addToUi();
+}
+
+/*
+This code defines a function called "copySlidesAndAddNames()" that allows you to create copies of a Google Slides template and add student names to each slide. To use the function, follow these steps:
+
+1. Open the Google Sheets document containing the data and template link.
+2. In the "Sheet1" tab, enter the template link in cell B2.
+3. Enter the desired file name in cell A3 and additional information in cell A4.
+4. Populate the student names starting from cell A5 downwards.
+5. Go to the "Extensions" menu and click on "Copy Slides and Add Names".
+
+The function will do the following:
+
+- Access the spreadsheet and extract the necessary data.
+- Make a copy of the original Google Slides template with the specified file name.
+- Duplicate the first slide for each student name.
+- Add the student names to the corresponding slides in the copied presentation.
+- Set the size, position, and font size of the text boxes.
+- Save and close the copied presentation.
+- Add a timestamp and the URL of the copied slides to the first available empty cells in columns D and E.
+
+Please ensure that you have the necessary permissions and the required data is correctly entered in the spreadsheet before running the function.
+
+Except for theformatSheet() function, this code was co-written with ChatGPT.
+
+An example template is the 8*pARTs EduProtocol - https://docs.google.com/presentation/d/18UsGgAiwmqFg-mKKrQN3hM0JfskU9qo_CCuKixccX-k/edit#slide=id.g258353f8bd1_0_52. 
+
+The original template can be found at https://www.eduprotocols.com/8parts
+
+*/
+
+function formatSheet(){
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+
+  sheet.getRange('A1:B1').merge().setValue('Template').setFontSize('24');
+  sheet.getRange('A2').setValue('Template');
+  sheet.getRange('B2').setValue('Copy/paste a Google Slide template in this box.')
+  sheet.getRange('A4').setValue('ClassName Roster').setFontSize('24');
+  sheet.getRange('A5').setValue('Delete this cell and start typing your class roster. 1 name goes in each cell in column A. The names will automatically sort when the Slide deck is made.')
+
+}
+
+function addAnotherPeriod(){
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var periodCount = ss.getSheets().filter(function(sheet) {
+    return sheet.getName().startsWith("Period");
+  }).length + 2; // Add 2 to start from Period 2
+
+  var newSheetName = "Period " + periodCount;
+  ss.insertSheet(newSheetName);
+
+  formatSheet();
+}
+
+
+function copySlidesAndAddNames() {
+  // Access the active spreadsheet
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Get the sheet where your data is
+  var sheet = ss.getSheetByName('Sheet1'); // Replace with your sheet name if different
+  
+  // Get the link to the original Google Slides
+  var link = sheet.getRange('B2').getValue();
+  
+  // Extract the ID from the URL
+  var id = link.match(/[-\w]{25,}/);
+  
+  // Open the original Google Slides
+  var originalSlides = SlidesApp.openById(id);
+  
+  // Get all the data in column A
+  var values = sheet.getRange('A1:A' + sheet.getLastRow()).getValues();
+
+  // Filter values to get names from A5 to the first blank cell and sort them
+  var names = values.slice(5).map(row => row[0]).filter(name => name !== "").sort();
+  
+  // Check if there are any names
+  if (names.length == 0) {
+    Logger.log("No names in the specified range. Please provide at least one name in the cells from A6 downwards.");
+    return;
+  }
+
+  // Get the current date
+  var currentDate = new Date();
+
+  // Format date as MM-DD-YYYY
+  var dateFormatted = Utilities.formatDate(currentDate, ss.getSpreadsheetTimeZone(), 'MM-dd-yyyy');
+
+  // Get the file name from A1 and B3 cells and append the date
+  var fileName = sheet.getRange('A3').getValue() + " " + sheet.getRange('A4').getValue() + " " + dateFormatted;
+  
+  // Make a copy of the original slides with the new file name
+  var copy = DriveApp.getFileById(id).makeCopy(fileName);
+    
+  // Open the copied Google Slides
+  var copySlides = SlidesApp.openById(copy.getId());
+    
+  // Get the first slide
+  var slide = copySlides.getSlides()[0];
+
+  // Duplicate the first slide for each name
+  for (var i = 0; i < names.length - 1; i++) {
+    slide.duplicate();
+  }
+    
+  // Get all slides in the copied presentation
+  var slides = copySlides.getSlides();
+
+  // Add each name to the corresponding slide in the copied presentation
+  for (var i = 0; i < names.length; i++) {
+    var name = names[i];
+    var slide = slides[i];
+    
+    // Create a new text box
+    var shape = slide.insertTextBox(name);
+    
+    // Set the size of the text box
+    shape.setWidth(200).setHeight(50);
+
+    // Position the text box at the bottom left of the slide
+    shape.setTop(333).setLeft(10);
+
+    // Change the font size to 36
+    var textRange = shape.getText();
+    textRange.getTextStyle().setFontSize(36);
+  }
+    
+  // Save and close the copied presentation
+  copySlides.saveAndClose();
+  
+  // Calculate the next empty row in column D and E
+  var nextRowD = sheet.getRange('D1:D' + sheet.getLastRow()).getValues().flat().filter(String).length + 1;
+  var nextRowE = sheet.getRange('E1:E' + sheet.getLastRow()).getValues().flat().filter(String).length + 1;
+  
+  // Ensure the row index is at least 1
+  nextRowD = Math.max(nextRowD, 1);
+  nextRowE = Math.max(nextRowE, 1);
+  
+  // Add timestamp and URL to the first blank cells in column D and E
+  sheet.getRange('D' + nextRowD).setValue(currentDate);
+  sheet.getRange('E' + nextRowE).setValue(copySlides.getUrl());
+}
+
